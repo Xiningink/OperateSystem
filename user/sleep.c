@@ -7,7 +7,10 @@ int main(int argc, char const *argv[])
     fprintf(2, "usage: sleep <time>\n");
     exit(1);
   }
-  sleep(atoi(argv[1]));
+  else{
+    sleep(atoi(argv[1]));
+  }
+
   exit(0);
 }
 
