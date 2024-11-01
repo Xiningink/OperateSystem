@@ -2,7 +2,7 @@
 #include "kernel/riscv.h"
 #include "kernel/sysinfo.h"
 #include "user/user.h"
-#include "kernel/proc.c"
+
 
 void
 sinfo(struct sysinfo *info) {
@@ -130,4 +130,3 @@ main(int argc, char *argv[])
   printf("sysinfotest: OK\n");
   exit(0);
 }
-

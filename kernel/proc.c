@@ -658,3 +658,16 @@ procdump(void)
     printf("\n");
   }
 }
+
+void
+get_proc_num(uint64 *num)
+{
+  *num = 0;
+  struct proc *p;
+  // 不需要锁进程 proc 结构，因为我们只需要读取进程列表，不需要写
+  for (p = proc; p < &proc[NPROC]; p++) {
+     // 不是 UNUSED 的进程位，就是已经分配的
+    if (p->state != UNUSED)
+      (*num)++;
+  }
+}
