@@ -5,7 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
-
+#include "spinlock.h" 
+#include "proc.h"
 /*
  * the kernel's page table.
  */
@@ -129,6 +130,29 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
   if(mappages(kpgtbl, va, sz, pa, perm) != 0)
     panic("kvmmap");
 }
+// Create a kernel page table for the process
+
+void
+uvmmap(pagetable_t pagetable, uint64 va, uint64 pa, uint64 sz, int perm)
+{
+  if(mappages(pagetable, va, sz, pa, perm) != 0)
+    panic("uvmmap");
+}
+
+pagetable_t
+proc_kpt_init(){
+  pagetable_t kernelpt = uvmcreate();
+  if (kernelpt == 0) return 0;
+  uvmmap(kernelpt, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  uvmmap(kernelpt, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  uvmmap(kernelpt, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+  uvmmap(kernelpt, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+  uvmmap(kernelpt, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  uvmmap(kernelpt, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+  uvmmap(kernelpt, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  return kernelpt;
+}
+
 
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa. va and size might not
@@ -432,3 +456,47 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+
+// print page tables lab3-1
+void vmprint(pagetable_t pagetable) {
+    printf("page table %p\n", pagetable);
+    // range top page dir
+    const int PAGE_SIZE = 512;
+    // 遍历最高级页目录
+    for (int i = 0; i < PAGE_SIZE; ++i) {
+        pte_t top_pte = pagetable[i];
+        if (top_pte & PTE_V) {
+            printf("..%d: pte %p pa %p\n", i, top_pte, PTE2PA(top_pte));
+            // this PTE points to a lower-level page table.
+            pagetable_t mid_table = (pagetable_t) PTE2PA(top_pte);
+            // 遍历中间级页目录
+            for (int j = 0; j < PAGE_SIZE; ++j) {
+                pte_t mid_pte = mid_table[j];
+                if (mid_pte & PTE_V) {
+                    printf(".. ..%d: pte %p pa %p\n",
+                           j, mid_pte, PTE2PA(mid_pte));
+                    pagetable_t bot_table = (pagetable_t) PTE2PA(mid_pte);
+                    // 遍历最低级页目录
+                    for (int k = 0; k < PAGE_SIZE; ++k) {
+                        pte_t bot_pte = bot_table[k];
+                        if (bot_pte & PTE_V) {
+                            printf(".. .. ..%d: pte %p pa %p\n",
+                                   k, bot_pte, PTE2PA(bot_pte));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// Store kernel page table to SATP register
+void
+proc_inithart(pagetable_t kpt){
+  w_satp(MAKE_SATP(kpt));
+  sfence_vma();
+}
+
+
